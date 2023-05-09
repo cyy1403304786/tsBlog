@@ -1,0 +1,27 @@
+{
+  "name": "cyy",
+  "version": "1.0.0",
+  "description": "ts 的相关介绍",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "vuepress dev docs --temp .temp",
+    "build": "vuepress build docs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cyy1403304786/vuecs3.git"
+  },
+  "keywords": [
+    "ying4786"
+  ],
+  "author": "cyy",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/cyy1403304786/vuecs3/issues"
+  },
+  "homepage": "https://github.com/cyy1403304786/vuecs3#readme",
+  "devDependencies": {
+    "vuepress": "^1.9.9"
+  }
+}
