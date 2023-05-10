@@ -15,7 +15,7 @@ module.exports = {
             '/blog/': [
               ['', '前言及目录'],
               ['Knowing', '一、去了解 TypeScript'],
-              ['TypeSystem', '一、TypeScript 的类型系统'],
+              ['TypeSystem', '二、TypeScript 的类型系统'],
             ],
         },
         sidebarDepth: 3, // 侧边栏显示2级
