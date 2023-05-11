@@ -232,10 +232,344 @@ const v2 = typeof email; // Value is "function"
 
 在这两个空间中，还有许多其他的结构有不同的含义：
 
-- this 在值空间是 JavaScript 的 this 关键字(Item 49)。作为一种类型，这是 this 的 TypeScript 类型，又名“多态 this”。它有助于实现带有子类的方法链。
+- `this` 在值空间是 JavaScript 的 this 关键字(Item 49)。作为一种类型，这是 this 的 TypeScript 类型，又名“多态 this”。它有助于实现带有子类的方法链。
 - 在值空间中 & 和 | 是代表 and 和 or。在类型空间中，它们是交集操作符和并集操作符。
-- const 值空间代表引入了一个新变量。as const 在类型空间中，改变了字面量或字面量表达式的推断类型。
-- extends 可以定义子类(类 a 扩展 B)或子类型(接口 a 扩展 B)或泛型类型的约束(generic <T extends number>)。
-- in 可以是循环(for (key in object))的一部分，也可以是映射类型。
+- `const` 值空间代表引入了一个新变量。`as const` 在类型空间中，改变了字面量或字面量表达式的推断类型。
+- `extends` 可以定义子类(类 a 扩展 B)或子类型(接口 a 扩展 B)或泛型类型的约束。
+- `in` 可以是循环(`for (key in object)`)的一部分，也可以是映射类型。
 
 ## 2.4、首选类型声明，而不是类型断言
+
+::: tip 提示
+`TypeScript` 有两种指定类型的方法，分别是 `类型声明` 和 `类型断言`。
+:::
+
+```ts
+interface Person {
+  name: string;
+}
+const alice: Person = { name: "Alice" }; // Type is Person
+const bob = { name: "Bob" } as Person; // Type is Person
+```
+
+这两种声明目的相同，实际却完全不同。第一个（`alice：Person`）向变量添加`类型声明`，并确保值符合类型。后者(`as Person`)执行`类型断言`，这告诉 TypeScript，不管编译器推断的类型是什么，
+相信我，它就是类型 `Person`。
+
+但通常，我们更倾向于用`类型声明`而不是`类型断言`。以下是为什么：
+
+```ts
+const alice: Person = {};
+// ~~~~~ Property 'name' is missing in type '{}'
+// but required in type 'Person'
+const bob = {} as Person; // No error
+
+// 多余属性的检查
+const alice: Person = {
+  name: "Alice",
+  occupation: "TypeScript developer",
+  // ~~~~~~~~~ Object literal may only specify known properties
+  // and 'occupation' does not exist in type 'Person'
+};
+const bob = {
+  name: "Bob",
+  occupation: "JavaScript developer",
+} as Person; // No error
+```
+
+- `类型声明`验证该值是否符合接口的要求，由于没有，所以 `TypeScript` 会标记一个错误。
+
+- `类型断言`通过告诉类型检查器，无论出于何种原因，你比它知道得更好，从而使此错误消失。
+
+因为`类型声明`提供了额外的安全检查，所以除非有特定的理由使用`类型断言`，否则应该使用`类型声明`。
+
+那么，如果将声明与箭头函数一起使用呢？比如，希望在下述代码中使用命名的 `Person` 接口，该怎么办呢？
+
+```js
+const people = ["alice", "bob", "jan"].map((name) => ({ name }));
+// { name: string; }[]... but we want Person[]
+```
+
+我们很容易在这里使用 `类型断言`，它似乎可以解决问题：
+
+```ts
+const people = ["alice", "bob", "jan"].map((name) => ({ name } as Person)); // Type is Person[]
+```
+
+但是它会存在一些问题，例如：
+
+```ts
+const people = ["alice", "bob", "jan"].map((name) => ({} as Person));
+// No error
+```
+
+那么，你如何在此上下文中使用`类型声明`呢？最直接的方法是在箭头函数中声明一个变量：
+
+```ts
+const people: Person[] = ["alice", "bob", "jan"].map(
+  (name): Person => ({ name })
+);
+```
+
+这与之前的版本对值执行的检查相同。这里的括号很重要！`(name): Person`推断 `name`的类型，并指定返回的类型应为 `Person`。
+
+::: warning
+那么什么时候应该使用`类型断言`呢?当你真正比 TypeScript 了解一个类型更多的时候，`类型断言`是最有意义的，通常是在类型检查器不可用的上下文中。例如，你可能比 TypeScript 更准确地知道`DOM`元素的类型:
+:::
+
+```js
+document.querySelector('#myButton').addEventListener('click', e => {
+ e.currentTarget // Type is EventTarget
+ const button = e.currentTarget as HTMLButtonElement;
+ button // Type is HTMLButtonElement
+});
+```
+
+因为 TypeScript 无法访问页面的`DOM`，所以它无法知道`#myButton`是一个`button`元素。它不知道事件的当前目标应该是同一个按钮。因为你有 TypeScript 没有的信息，所以类型断言在这里是有意义的。
+
+您还可能遇到`非空断言`，这非常常见，以至于它得到一个特殊语法：
+
+```js
+const elNull = document.getElementById('foo'); // Type is HTMLElement | null
+const el = document.getElementById('foo')!; // Type is HTMLElement
+```
+
+用作前缀，!是布尔否定。作为后缀，!被解释为值非空的断言。就像其他断言一样：它会在编译期间被擦除，所以只有在你有类型检查器缺乏的信息并且可以确保值非空的情况下才应该使用它。如果不能，应该使用条件语句
+检查是否有 null。
+
+## 2.5、避免对象包装类型
+
+::: tip 提示
+除了对象之外，JavaScript 还有 7 种基本类型:`字符串`、`数字`、`布尔值`、`null`、`undefined`、`symbol`和`bigint`。前五种从一开始就存在了。`symbol`是在 ES2015 中添加的，`bigint`正在定稿过程中。
+:::
+
+基本类型与对象的区别在于不可变且没有方法。你可能会认为字符串确实有方法：
+
+```sh
+> 'primitive'.charAt(3)
+"m"
+```
+
+但事情并不像看上去那么简单。这里有一些令人惊讶和微妙的事情。虽然`string基本类型`没有方法，但 JavaScript 也定义了`String对象类型`。JavaScript 可以在这些类型之间自由转换。当在`string基本类型`上访问
+`charAt`等方法时，JavaScript 会将其包装在`String对象`中，调用该方法，然后丢弃该对象。
+
+向对象包装类型的隐式转换解释了 javascript 中的一种奇怪现象——如果将属性赋值给基本类型，该属性就会消失：
+
+```sh
+> x = "hello"
+> x.language = 'English'
+'English'
+> x.language
+undefined
+```
+
+现在你知道原因了：x 被转换为一个字符串实例，在其上设置 `language` 属性，然后该对象(及其 language 属性)被丢弃。
+
+其他基本类型也有对象包装类型:Number 表示数值，Boolean 表示布尔值，Symbol 表示符号，BigInt 表示 BigInt (null 和 undefined 没有对象包装)。
+
+包装类型的存在是为了方便为基本类型值提供方法或提供静态方法(例如 String.fromCharCode)。但是通常没有理由直接实例化它们。
+
+你很容易不小心输入`String`(特别是如果你来自 Java 或 c#)，它甚至看起来可以正常工作，至少一开始是这样:
+
+```ts
+function getStringLen(foo: String) {
+  return foo.length;
+}
+getStringLen("hello"); // OK
+getStringLen(new String("hello")); // OK
+```
+
+但是，当你试图将字符串对象传递给一个期望字符串的方法时，就会出错:
+
+```ts
+function isGreeting(phrase: String) {
+  return ["hello", "good day"].includes(phrase);
+  // ~~~~~~
+  // Argument of type 'String' is not assignable to parameter
+  // of type 'string'.
+  // 'string' is a primitive, but 'String' is a wrapper object;
+  // prefer using 'string' when possible
+}
+```
+
+::: warning
+`string`可以赋值给`String`，但`Sting`不能赋值给`string`。困惑吗？按照错误消息中的建议，坚持使用`string`。TypeScript 附带的所有类型声明都使用它，几乎所有其他库的类型声明都使用它。
+:::
+
+<font color="#dd0000">使用包装器对象的另一种方式是显式地提供一个大写字母的类型注解:</font>
+
+```ts
+const s: String = "primitive";
+const n: Number = 12;
+const b: Boolean = true;
+```
+
+当然，运行时的值仍然是基本类型，而不是对象。但是 TypeScript 允许这些声明，因为基本类型可以赋值给对象包装器。这些注释具有误导性和冗余性。最好还是坚持使用基本类型。
+
+## 2.6、认识到过度检查属性的限制
+
+当你将一个对象字面量赋值给一个声明了类型的变量时，TypeScript 会确保它具有该类型的属性，而不是其他类型：
+
+```ts
+interface Room {
+  numDoors: number;
+  ceilingHeightFt: number;
+}
+const r: Room = {
+  numDoors: 1,
+  ceilingHeightFt: 10,
+  elephant: "present",
+  // ~~~~~~~~~~~~~~~~~~ Object literal may only specify known properties,
+  // and 'elephant' does not exist in type 'Room'
+};
+```
+
+虽然有一个`elephant`属性很奇怪，但从结构类型的角度来看，这个错误没有多大意义。这个常量赋值给`Room`类型，可以通过引入一个中间变量来看到这一点：
+
+```ts
+const obj = {
+  numDoors: 1,
+  ceilingHeightFt: 10,
+  elephant: "present",
+};
+const r: Room = obj; // OK
+```
+
+`obj`的类型被推断为`{numDoors: number;ceilingHeightFt: number; elephant: string}。`因为这个类型包含`Room`类型值的一个子集，所以它可以被赋值给`Room`，并且代码通过了类型检查器。
+
+## 2.7、尽可能对整个函数表达式应用类型
+
+::: tip 提示
+TypeScript 中函数表达式的一个优点是，你可以一次性将类型声明应用于整个函数，减少重复，而不是单独指定参数和返回类型。
+:::
+
+```ts
+type DiceRollFn = (sides: number) => number;
+const rollDice: DiceRollFn = (sides) => {
+  /* ... */
+};
+```
+
+例如，如果你想编写几个用于数字算术的函数，可以这样写：
+
+```ts
+function add(a: number, b: number) {
+  return a + b;
+}
+function sub(a: number, b: number) {
+  return a - b;
+}
+function mul(a: number, b: number) {
+  return a * b;
+}
+function div(a: number, b: number) {
+  return a / b;
+}
+
+// 改造后
+type BinaryFn = (a: number, b: number) => number;
+const add: BinaryFn = (a, b) => a + b;
+const sub: BinaryFn = (a, b) => a - b;
+const mul: BinaryFn = (a, b) => a * b;
+const div: BinaryFn = (a, b) => a / b;
+```
+
+这比以前有更少的类型注释，并且它们与函数实现分离。这使得逻辑更加明显。还检查了所有函数表达式的返回类型是否都是`number`。
+
+## 2.8、了解类型和接口之间的差异
+
+::: tip 提示
+如果你想在 `TypeScript` 中定义一个命名类型，你有两个选择。`类型（type）`和 `接口 （interface）`。在许多情况下，两种类型都可以使用，那么哪种情况下使用哪种类型比较好呢？
+:::
+
+```ts
+type TState = {
+  name: string;
+  capital: string;
+};
+interface IState {
+  name: string;
+  capital: string;
+}
+```
+
+接口可以扩展类型(有一些注意事项，稍后会解释)，类型也可以扩展接口：
+
+```ts
+interface IStateWithPop extends TState {
+ population: number;
+}
+type TStateWithPop = IState & { population: number; }；
+```
+
+这些类型是相同的。需要注意的是，接口不能扩展像联合类型那样的复杂类型。要做到这一点，需要使用 type 和 &。
+
+有联合类型但是没有联合接口：
+
+```ts
+type AorB = "a" | "b";
+```
+
+扩展联合类型可能很有用。如果输入和输出变量有不同的类型，并且有名称到变量的映射:
+
+```ts
+type Input = {
+  /* ... */
+};
+type Output = {
+  /* ... */
+};
+interface VariableMap {
+  [name: string]: Input | Output;
+}
+```
+
+然后，你可能需要一个将名称附加到变量上的类型。这将是：
+
+```ts
+type NamedVariable = (Input | Output) & { name: string };
+```
+
+此类型不能用`interface`表示。一般来说，类型比接口更有能力。它可以是一个联合，也可以利用更高级的功能，如映射类型或条件类型。它还可以更容易地表达元组和数组类型：
+
+```ts
+type Pair = [number, number];
+type StringList = string[];
+type NamedNums = [string, ...number[]];
+```
+
+你也可以使用 `interface` 来表达一个元组，但会很尴尬，而且会丢弃所有的元组方法，比如 concat。最好使用类型！
+
+```ts
+interface Tuple {
+  0: number;
+  1: number;
+  length: 2;
+}
+const t: Tuple = [10, 20]; // OK
+```
+
+不过，接口确实具有一些类型所没有的能力。其中之一是 <font color="#dd0000">接口可以被增强。</font> 回到`State`的例子，你可以添加`population`字段
+
+```ts
+interface IState {
+  name: string;
+  capital: string;
+}
+interface IState {
+  population: number;
+}
+const wyoming: IState = {
+  name: "Wyoming",
+  capital: "Cheyenne",
+  population: 500_000,
+}; // OK
+```
+
+这就是所谓的 <font color="#dd0000">“声明合并”</font> ，这主要用于类型声明文件(第 6 章)，如果你正在编写一个类型声明文件，应该遵循规范并使用`interface`来支持它。这个想法是，在你的类型声明中
+可能有用户需要填补的空白，这就是他们如何做到这一点。
+
+::: warning
+总结：对于复杂类型，你没有选择：你需要使用 `type`。 对于没有固定风格的项目，你应该考虑扩展，如需要通过接口合并新字段，你需要使用 `interface`。
+:::
+
+## 2.9、使用类型操作和泛型来避免重复代码
