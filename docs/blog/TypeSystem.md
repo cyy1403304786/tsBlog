@@ -573,3 +573,67 @@ const wyoming: IState = {
 :::
 
 ## 2.9、使用类型操作和泛型来避免重复代码
+
+我们经常会写一些类型重复的代码，如下：
+
+```ts
+interface Person {
+  firstName: string;
+  lastName: string;
+}
+interface PersonWithBirthDate {
+  firstName: string;
+  lastName: string;
+  birth: Date;
+}
+```
+
+减少重复的最简单方法是给类型命名。对于上述例子你可以通过接口扩展的形式消除引用：
+
+```ts
+interface Person {
+  firstName: string;
+  lastName: string;
+}
+interface PersonWithBirthDate extends Person {
+  birth: Date;
+}
+```
+
+现在只需要写额外的字段。如果两个接口共享它们的字段的子集，那么你可以使用这些公共字段提取出一个基类。
+
+你也可以往另一个方向走。如果你有一个类型，`State`，代表整个应用程序的状态，还有一个 `TopNavState`，代表部分应用程序的状态，该怎么办？
+
+```ts
+interface State {
+  userId: string;
+  pageTitle: string;
+  recentFiles: string[];
+  pageContents: string;
+}
+interface TopNavState {
+  userId: string;
+  pageTitle: string;
+  recentFiles: string[];
+}
+```
+
+你不想通过扩展 `TopNavState`来构建状态，而是想把 `TopNavState` 定义为 `State` 中字段的一个子集。你可以用 `泛型` 可以做的更好：
+
+```ts
+type TopNavState = {
+  [k in "userId" | "pageTitle" | "recentFiles"]: State[k];
+};
+```
+
+::: warning
+`映射类型` 在类型系统中相当于遍历数组中的字段。这种特殊的模式非常常见，因此它是标准库的一部分，我们将其称为 `Pick` 。
+:::
+
+```ts
+type Pick<T, K> = { [k in K]: T[k] };
+
+type TopNavState = Pick<State, "userId" | "pageTitle" | "recentFiles">;
+```
+
+`Pick` 是泛型类型的一个例子。继续类比删除重复的代码，使用 `Pick` 等同于调用函数。`Pick` 接受两种类型(T 和 K)，并返回第三种，就像函数可能接受两个值并返回第三种值一样。
